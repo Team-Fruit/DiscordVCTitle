@@ -117,7 +117,7 @@ async def on_message(message):
 
 # メッセージ受信時に動作する処理
 @bot.command(name='title')
-async def title(ctx: commands.Context, arg: str = 'join'):
+async def title(ctx: commands.Context, *, arg: str = 'join'):
     message: discord.Message = ctx.message
 
     # メッセージ送信者がBotだった場合は無視する
@@ -171,9 +171,18 @@ async def title(ctx: commands.Context, arg: str = 'join'):
         title: Title = vclist[vc.id]
 
         # 所有者リスト
-        owner_list: List[str] = [f'　`{owner.display_name} ({str(owner)})`' for owner in title.owners]
+        owner_list: List[str] = [f'`{owner.display_name} ({str(owner)})`' for owner in title.owners]
         owner_msg: str = '\n'.join(owner_list) if owner_list else '　なし\n※エラーによりチャンネルの復元が失敗している可能性があります。'
-        await message.channel.send(f'`{vc.name}`のラベルの所有者:\n{owner_msg}')
+        await message.channel.send(
+            embed = discord.Embed(
+                title = '👤 ラベルの所有者',
+                description =
+                    f'所有者: {len(title.owners)}人'
+            )
+            .add_field(name='チャンネル名', value=title.default_name, inline=False)
+            .add_field(name='ラベル名', value=title.name, inline=False)
+            .add_field(name='所有者', value=owner_msg, inline=False)
+        )
 
         return
 
