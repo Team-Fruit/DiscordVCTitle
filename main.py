@@ -56,7 +56,10 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
 
     # Botによる操作を無視
     if before.id in vclist:
-        return
+        title: Title = vclist.get(before.id)
+        if title is not None:
+            if title.titled_name() == after.name:
+                return
 
     # キャッシュ削除
     vclist.pop(before.id, None)
@@ -117,7 +120,7 @@ async def on_message(message):
 
 # メッセージ受信時に動作する処理
 @bot.command(name='title')
-async def title(ctx: commands.Context, *, arg: str = 'join'):
+async def title(ctx: commands.Context, *, arg: str = 'help'):
     message: discord.Message = ctx.message
 
     # メッセージ送信者がBotだった場合は無視する
@@ -131,9 +134,9 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
                 title = 'ℹ️ 使い方',
                 description =
                     '`/title ラベル` 参加中のVCにラベルをつける\n'
-                    '`/title` ラベルの所有権を取得します\n'
+                    '`/title`、`/title help` ヘルプ\n'
                     '`/title join` ラベルの所有権を取得します\n'
-                    '`/title owner` ラベルの所有者を確認する\n'
+                    '`/title info` ラベルの所有者を確認する\n'
                     '※VCから抜けると所有権が解放されます\n'
                     '※所有者がいなくなると名前が戻ります'
             )
@@ -161,10 +164,10 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
         return
     
     # 所有者チェック
-    if arg == 'owner':
+    if arg == 'info' or arg == 'owner':
         # ラベルなし
         if not vc.id in vclist:
-            await message.channel.send('VCにラベルは作成されていません')
+            await message.channel.send(f'`{vc.name}`にラベルは作成されていません')
             return
 
         # ラベル
@@ -173,6 +176,8 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
         # 所有者リスト
         owner_list: List[str] = [f'`{owner.display_name} ({str(owner)})`' for owner in title.owners]
         owner_msg: str = '\n'.join(owner_list) if owner_list else '　なし\n※エラーによりチャンネルの復元が失敗している可能性があります。'
+        if not message.author in title.owners:
+            owner_msg += '\n➡️`/title join`で所有権を取得'
         await message.channel.send(
             embed = discord.Embed(
                 title = '👤 ラベルの所有者',
@@ -190,7 +195,7 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
     elif arg == 'join':
         # ラベルなし
         if not vc.id in vclist:
-            await message.channel.send('VCにラベルは作成されていません')
+            await message.channel.send(f'`{vc.name}`にラベルは作成されていません')
             return
 
         # ラベル
@@ -204,8 +209,11 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
         title.owners.add(message.author)
 
         try:
-            if guild.me.guild_permissions.manage_messages:
-                await message.delete()
+            permission: discord.Permissions = guild.me.permissions_in(message.channel)
+            if permission.add_reactions:
+                await message.add_reaction('✅')
+            if permission.manage_messages:
+                await message.delete(delay=5)
         except Exception as e:
             pass
 
@@ -229,8 +237,11 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
             title.owners.add(message.author)
 
             try:
-                if guild.me.guild_permissions.manage_messages:
-                    await message.delete()
+                permission: discord.Permissions = guild.me.permissions_in(message.channel)
+                if permission.add_reactions:
+                    await message.add_reaction('✅')
+                if permission.manage_messages:
+                    await message.delete(delay=5)
             except Exception as e:
                 pass
 
@@ -245,8 +256,11 @@ async def title(ctx: commands.Context, *, arg: str = 'join'):
             # 名前を変更
             try:
                 await vc.edit(name=title.titled_name(), reason='VC Title Created')
-                if guild.me.guild_permissions.manage_messages:
-                    await message.delete()
+                permission: discord.Permissions = guild.me.permissions_in(message.channel)
+                if permission.add_reactions:
+                    await message.add_reaction('✅')
+                if permission.manage_messages:
+                    await message.delete(delay=5)
             except discord.Forbidden as e:
                 await message.channel.send(f'<:terminus:451694123779489792>BotがアクセスできないVCです')
             except discord.HTTPException as e:
