@@ -12,6 +12,31 @@ from discord.ext import commands
 bot = commands.Bot(command_prefix='/')
 
 
+# メッセージを受信し、削除する
+async def ex_accept_and_delete(self: discord.Message, *, delete_delay: int=5, reaction: str='✅') -> discord.Message:
+    try:
+        permission: discord.Permissions = self.channel.permissions_for(self.guild.me)
+        if permission.add_reactions:
+            await self.add_reaction(reaction)
+        if permission.manage_messages:
+            await self.delete(delay=delete_delay)
+    except Exception:
+        pass
+
+async def ex_deny_and_delete(self: discord.Message, *, delete_delay: int=5, reaction: str='💥'):
+    await ex_accept_and_delete(self, delete_delay=delete_delay, reaction=reaction)
+
+discord.Message.accept_and_delete = ex_accept_and_delete
+discord.Message.deny_and_delete = ex_deny_and_delete
+
+
+# メッセージに返信し、削除する
+async def ex_reply_and_delete(self: discord.Message, content: str=None, *, embed: discord.Embed=None, delete_after: int=5) -> discord.Message:
+    await self.channel.send(content, embed=embed, delete_after=delete_after)
+
+discord.Message.reply_and_delete = ex_reply_and_delete
+
+
 # ラベル
 class Title:
     default_symbol: str
@@ -113,7 +138,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
 # メッセージ
 @bot.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     #処理
     await bot.process_commands(message)
 
@@ -129,7 +154,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
 
     # help
     if arg == 'help':
-        await message.channel.send(
+        await message.reply_and_delete(
             embed = discord.Embed(
                 title = 'ℹ️ 使い方',
                 description =
@@ -139,35 +164,40 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
                     '`/title info` ラベルの所有者を確認する\n'
                     '※VCから抜けると所有権が解放されます\n'
                     '※所有者がいなくなると名前が戻ります'
-            )
+            ),
+            delete_after=15
         )
+        await message.accept_and_delete()
         return
 
     # ギルド
     guild: discord.Guild = message.guild
 
     if guild is None:
-        await message.channel.send('DMやグループチャットはサポート外です')
+        await message.reply_and_delete('DMやグループチャットはサポート外です')
+        await message.deny_and_delete()
         return
 
     # VC
     voice: discord.VoiceState = message.author.voice
 
     if voice is None:
-        await message.channel.send('VCに入ってお試しください')
+        await message.reply_and_delete('VCに入ってお試しください')
+        await message.deny_and_delete()
         return
         
     vc: discord.VoiceChannel = voice.channel
 
     if vc is None:
-        await message.channel.send('wtf (権限?)')
+        await message.reply_and_delete('wtf (権限?)')
         return
     
     # 所有者チェック
     if arg == 'info' or arg == 'owner':
         # ラベルなし
         if not vc.id in vclist:
-            await message.channel.send(f'`{vc.name}`にラベルは作成されていません')
+            await message.reply_and_delete(f'`{vc.name}`にラベルは作成されていません')
+            await message.deny_and_delete()
             return
 
         # ラベル
@@ -178,7 +208,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         owner_msg: str = '\n'.join(owner_list) if owner_list else '　なし\n※エラーによりチャンネルの復元が失敗している可能性があります。'
         if not message.author in title.owners:
             owner_msg += '\n➡️`/title join`で所有権を取得'
-        await message.channel.send(
+        await message.reply_and_delete(
             embed = discord.Embed(
                 title = '👤 ラベルの所有者',
                 description =
@@ -188,6 +218,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
             .add_field(name='ラベル名', value=title.name, inline=False)
             .add_field(name='所有者', value=owner_msg, inline=False)
         )
+        await message.accept_and_delete()
 
         return
 
@@ -195,7 +226,8 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
     elif arg.startswith('join'):
         # ラベルなし
         if not vc.id in vclist:
-            await message.channel.send(f'`{vc.name}`にラベルは作成されていません')
+            await message.reply_and_delete(f'`{vc.name}`にラベルは作成されていません')
+            await message.deny_and_delete()
             return
 
         # ラベル
@@ -212,32 +244,38 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         for mention in add_owners:
             if mention in title.owners:
                 if mention == message.author:
-                    await message.channel.send('あなたは既に参加しています')
+                    await message.reply_and_delete('あなたは既に参加しています')
                 else:
-                    await message.channel.send(f'`{str(mention)}`は既にに参加しています')
+                    await message.reply_and_delete(f'`{str(mention)}`は既にに参加しています')
             elif not mention in vc.members:
-                await message.channel.send(f'`{str(mention)}`はVCに参加していません')
+                await message.reply_and_delete(f'`{str(mention)}`はVCに参加していません')
             else:
                 title.owners.add(mention)
                 member_added = True
         
         if not member_added:
+            await message.deny_and_delete()
             return
 
-        try:
-            permission: discord.Permissions = guild.me.permissions_in(message.channel)
-            if permission.add_reactions:
-                await message.add_reaction('✅')
-            if permission.manage_messages:
-                await message.delete(delay=5)
-        except Exception as e:
-            pass
-
+        await message.accept_and_delete()
         return
 
     else:
+        # 編集
+        edit: bool = False
+        if arg.startswith('edit '):
+            edit = True
+            arg = arg[5:]
+
         # 名前をキャッシュ
         if not vc.id in vclist:
+            # ラベルなし
+            if edit:
+                await message.reply_and_delete(f'`{vc.name}`にラベルは作成されていません')
+                await message.deny_and_delete()
+                return
+            
+            # 新規
             vclist[vc.id] = Title(vc.name, message.channel)
         
         # ラベル
@@ -247,44 +285,36 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         if title.name == arg:
             # 参加
             if message.author in title.owners:
-                await message.channel.send('あなたは既にに参加しています')
+                await message.reply_and_delete('あなたは既にに参加しています')
+                await message.deny_and_delete()
                 return
             
             title.owners.add(message.author)
 
-            try:
-                permission: discord.Permissions = guild.me.permissions_in(message.channel)
-                if permission.add_reactions:
-                    await message.add_reaction('✅')
-                if permission.manage_messages:
-                    await message.delete(delay=5)
-            except Exception as e:
-                pass
-
+            await message.accept_and_delete()
             return
         else:
             # 新しい名前
             title.name = arg
             
             # 新しい所有者
-            title.owners = { message.author }
+            if not edit:
+                title.owners = { message.author }
 
             # 名前を変更
             try:
                 await vc.edit(name=title.titled_name(), reason='VC Title Created')
-                permission: discord.Permissions = guild.me.permissions_in(message.channel)
-                if permission.add_reactions:
-                    await message.add_reaction('✅')
-                if permission.manage_messages:
-                    await message.delete(delay=5)
+                await message.accept_and_delete()
+                return
             except discord.Forbidden as e:
-                await message.channel.send(f'<:terminus:451694123779489792>BotがアクセスできないVCです')
+                await message.reply_and_delete(f'<:terminus:451694123779489792>BotがアクセスできないVCです')
+                await message.deny_and_delete()
             except discord.HTTPException as e:
-                await message.channel.send(f'<:terminus:451694123779489792>HTTPException: {e}')
+                await message.reply_and_delete(f'<:terminus:451694123779489792>HTTPException: {e}')
+                await message.deny_and_delete()
             except Exception as e:
-                await message.channel.send(f'<:terminus:451694123779489792>Exception: {e}')
-
-            return
+                await message.reply_and_delete(f'<:terminus:451694123779489792>Exception: {e}')
+                await message.deny_and_delete()
 
 
 # Botの起動とDiscordサーバーへの接続
