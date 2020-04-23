@@ -125,13 +125,12 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
         # 名前を戻す
         try:
-            await vc.edit(name=title.default_name, reason='VC Title Removed')
+            if vc.name != title.default_name:
+                await vc.edit(name=title.default_name, reason='VC Title Removed')
             # キャッシュ削除
             vclist.pop(vc.id, None)
         except discord.Forbidden as e:
             await channel.send(f'{error_msg}: BotがアクセスできないVCです')
-        except discord.HTTPException as e:
-            await channel.send(f'{error_msg}: HTTPException: {e}')
         except Exception as e:
             await channel.send(f'{error_msg}: Exception: {e}')
 
@@ -191,6 +190,12 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
     if vc is None:
         await message.reply_and_delete('wtf (権限?)')
         return
+
+    permission: discord.Permissions = vc.permissions_for(guild.me)
+    if not permission.manage_channels:
+        await message.reply_and_delete('<:terminus:451694123779489792>BotがアクセスできないVCです')
+        await message.deny_and_delete()
+        return
     
     # 所有者チェック
     if arg == 'info' or arg == 'owner':
@@ -216,7 +221,8 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
             )
             .add_field(name='チャンネル名', value=title.default_name, inline=False)
             .add_field(name='ラベル名', value=title.name, inline=False)
-            .add_field(name='所有者', value=owner_msg, inline=False)
+            .add_field(name='所有者', value=owner_msg, inline=False),
+            delete_after=15
         )
         await message.accept_and_delete()
 
@@ -306,12 +312,6 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
                 await vc.edit(name=title.titled_name(), reason='VC Title Created')
                 await message.accept_and_delete()
                 return
-            except discord.Forbidden as e:
-                await message.reply_and_delete(f'<:terminus:451694123779489792>BotがアクセスできないVCです')
-                await message.deny_and_delete()
-            except discord.HTTPException as e:
-                await message.reply_and_delete(f'<:terminus:451694123779489792>HTTPException: {e}')
-                await message.deny_and_delete()
             except Exception as e:
                 await message.reply_and_delete(f'<:terminus:451694123779489792>Exception: {e}')
                 await message.deny_and_delete()
