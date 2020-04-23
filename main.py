@@ -192,7 +192,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         return
 
     # 所有権取得
-    elif arg == 'join':
+    elif arg.startswith('join'):
         # ラベルなし
         if not vc.id in vclist:
             await message.channel.send(f'`{vc.name}`にラベルは作成されていません')
@@ -201,12 +201,28 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         # ラベル
         title: Title = vclist[vc.id]
 
-        # 参加
-        if message.author in title.owners:
-            await message.channel.send('既にに参加しています')
-            return
+        # 追加リスト
+        add_owners: Set[discord.Member] = { message.author }
+        # メンションが含まれていたらその人を追加
+        if message.mentions:
+            add_owners = set(message.mentions)
         
-        title.owners.add(message.author)
+        # 参加
+        member_added: bool = False
+        for mention in add_owners:
+            if mention in title.owners:
+                if mention == message.author:
+                    await message.channel.send('あなたは既に参加しています')
+                else:
+                    await message.channel.send(f'`{str(mention)}`は既にに参加しています')
+            elif not mention in vc.members:
+                await message.channel.send(f'`{str(mention)}`はVCに参加していません')
+            else:
+                title.owners.add(mention)
+                member_added = True
+        
+        if not member_added:
+            return
 
         try:
             permission: discord.Permissions = guild.me.permissions_in(message.channel)
@@ -231,7 +247,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         if title.name == arg:
             # 参加
             if message.author in title.owners:
-                await message.channel.send('既にに参加しています')
+                await message.channel.send('あなたは既にに参加しています')
                 return
             
             title.owners.add(message.author)
