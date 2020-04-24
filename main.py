@@ -93,7 +93,7 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
 # VCのメンバー移動時の処理
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-    # 移動元のVCのラベル所有権を削除
+    # 移動元のVCのラベルのメンバーを削除
 
     # チャンネル移動は除外
     if before.channel == after.channel:
@@ -114,10 +114,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     if title is None:
         return
 
-    # 所有権削除
+    # メンバー削除
     title.owners.discard(member)
 
-    # 所有権ゼロチェック
+    # メンバーゼロチェック
     if not title.owners:
         # ラベル削除
         channel: discord.channel.TextChannel = title.default_request_channel
@@ -159,10 +159,9 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
                 description =
                     '`/title ラベル` 参加中のVCにラベルをつける\n'
                     '`/title`、`/title help` ヘルプ\n'
-                    '`/title join` ラベルの所有権を取得します\n'
-                    '`/title info` ラベルの所有者を確認する\n'
-                    '※VCから抜けると所有権が解放されます\n'
-                    '※所有者がいなくなると名前が戻ります'
+                    '`/title join` ラベルに参加します\n'
+                    '`/title info` ラベルのメンバーを確認する\n'
+                    '※VCからメンバーが全員抜けると名前が戻ります'
             ),
             delete_after=15
         )
@@ -197,7 +196,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         await message.deny_and_delete()
         return
     
-    # 所有者チェック
+    # メンバーチェック
     if arg == 'info' or arg == 'owner':
         # ラベルなし
         if not vc.id in vclist:
@@ -208,27 +207,27 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
         # ラベル
         title: Title = vclist[vc.id]
 
-        # 所有者リスト
+        # メンバーリスト
         owner_list: List[str] = [f'`{owner.display_name} ({str(owner)})`' for owner in title.owners]
         owner_msg: str = '\n'.join(owner_list) if owner_list else '　なし\n※エラーによりチャンネルの復元が失敗している可能性があります。'
         if not message.author in title.owners:
-            owner_msg += '\n➡️`/title join`で所有権を取得'
+            owner_msg += '\n➡️`/title join`でメンバーに参加'
         await message.reply_and_delete(
             embed = discord.Embed(
-                title = '👤 ラベルの所有者',
+                title = '👤 ラベルのメンバー',
                 description =
-                    f'所有者: {len(title.owners)}人'
+                    f'メンバー: {len(title.owners)}人'
             )
             .add_field(name='チャンネル名', value=title.default_name, inline=False)
             .add_field(name='ラベル名', value=title.name, inline=False)
-            .add_field(name='所有者', value=owner_msg, inline=False),
+            .add_field(name='メンバー', value=owner_msg, inline=False),
             delete_after=15
         )
         await message.accept_and_delete()
 
         return
 
-    # 所有権取得
+    # メンバー取得
     elif arg.startswith('join'):
         # ラベルなし
         if not vc.id in vclist:
@@ -303,7 +302,7 @@ async def title(ctx: commands.Context, *, arg: str = 'help'):
             # 新しい名前
             title.name = arg
             
-            # 新しい所有者
+            # 新しいメンバー
             if not edit:
                 title.owners = { message.author }
 
